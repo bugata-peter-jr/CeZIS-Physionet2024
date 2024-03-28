@@ -11,11 +11,11 @@ WORKDIR /challenge
 ## Install your dependencies here using apt install, etc.
 
 ## Include the following line if you have a requirements.txt file.
-## RUN pip install -r requirements.txt
+RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
 RUN conda install -c pytorch torchvision --yes
 RUN conda install -c conda-forge pytorch-model-summary --yes
 RUN conda install -c conda-forge pillow --yes
 RUN conda install -c conda-forge pandas --yes
-RUN conda install -c conda-forge imgaug --yes
-RUN conda install -c conda-forge wfdb --yes
+RUN conda install -c conda-forge wfdb=4.1.2 --yes
+RUN pip install imgaug==0.4.0 
 
