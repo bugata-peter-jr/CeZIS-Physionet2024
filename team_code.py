@@ -18,7 +18,7 @@ import pandas as pd
 
 import torch
 from networks import ConvnextNetwork
-from train_convnext import train
+from train_convnext import train, load_from_two_files
 
 from imgaug import augmenters as iaa
 from PIL import Image
@@ -118,7 +118,7 @@ class Model(object):
                 
         # create and load networks 
         for i in range(5):
-            fname = 'weights{:d}.h5'.format(i)
+            f_prefix = 'weights{:d}'.format(i)
             
             # create network with correct device - rotation
             network = ConvnextNetwork(n_outputs=1)
@@ -128,10 +128,11 @@ class Model(object):
             network.eval()
             
             try:
-                model_file = pretrained_folder + '/rotation/' + fname
-                network.load_state_dict(torch.load(model_file), strict=True)
+                rot_pretrained_path = pretrained_folder + '/rotation'
+                state_dict = load_from_two_files(rot_pretrained_path, f_prefix)
+                network.load_state_dict(state_dict, strict=True)
             except:
-                print('Weights file: {:s} not available.'.format(model_file))
+                print('Weights file: {:s} not available.'.format(rot_pretrained_path + '/' + f_prefix))
             
             self.networks_rot.append(network)
 
@@ -143,10 +144,11 @@ class Model(object):
             network.eval()
             
             try:
-                model_file = pretrained_folder + '/dx/' + fname                
-                network.load_state_dict(torch.load(model_file), strict=True)
+                dx_pretrained_path = pretrained_folder + '/dx' 
+                state_dict = load_from_two_files(dx_pretrained_path, f_prefix)                
+                network.load_state_dict(state_dict, strict=True)
             except:
-                print('Weights file: {:s} not available.'.format(model_file))
+                print('Weights file: {:s} not available.'.format(dx_pretrained_path + '/' + f_prefix))
             
             self.networks_dx.append(network)
             

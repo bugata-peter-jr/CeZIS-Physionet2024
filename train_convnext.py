@@ -63,6 +63,23 @@ def get_metadata(source_folder):
 def count_params(network):
     return sum(p.numel() for p in network.parameters() if p.requires_grad)
 
+# split weights into two smaller files
+def save_to_two_files(state_dict, output_path, f_prefix):
+    state_dict_A, state_dict_B = {}, {}
+    for i, (key, val) in enumerate(state_dict.items()):
+        if i < len(state_dict) // 2:
+            state_dict_A[key] = val
+        else:
+            state_dict_B[key] = val
+    torch.save(state_dict_A, output_path + '/' + f_prefix + '_A.h5')
+    torch.save(state_dict_B, output_path + '/' + f_prefix + '_B.h5')
+
+# merge files into one state dict    
+def load_from_two_files(path_to_load, f_prefix):
+    state_dict_A = torch.load(path_to_load + '/' + f_prefix + '_A.h5')
+    state_dict_B = torch.load(path_to_load + '/' + f_prefix + '_B.h5') 
+    return {**state_dict_A, **state_dict_B}
+
 # training networks - only classifiaction layer
 def train(data_folder, pretrained_path, output_path):
     
@@ -141,8 +158,9 @@ def train(data_folder, pretrained_path, output_path):
                  rank=None, world_size=1)
 
         # load weights from pretrained
-        pretrained_file = 'weights{}.h5'.format(i)
-        model.load_weights(pretrained_path + '/' + pretrained_file)
+        state_dict = load_from_two_files(pretrained_path, f_prefix='weights{}'.format(i))
+        model.network.load_state_dict(state_dict)
+        #model.load_weights(pretrained_path + '/' + pretrained_file)
         
         # fit
         model_file = 'weights{}.h5'.format(i)
