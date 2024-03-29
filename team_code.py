@@ -81,12 +81,18 @@ def run_digitization_model(digitization_model, record, verbose):
 def run_dx_model(dx_model, record, signal, verbose):
 
     probabilities = dx_model.predict(record)
-    classes = dx_model.classes
+    #classes = dx_model.classes
 
     # Choose the class(es) with the highest probability as the label(s).
-    max_probability = np.nanmax(probabilities)
-    labels = [classes[i] for i, probability in enumerate(probabilities) if probability == max_probability]
-
+    #max_probability = np.nanmax(probabilities)
+    #labels = [classes[i] for i, probability in enumerate(probabilities) if probability == max_probability]
+    
+    norm_prob = probabilities[0]    
+    if norm_prob >= 0.5:
+        labels = ['Normal']
+    else:
+        labels = ['Abnormal']
+    
     return labels
 
 ################################################################################
