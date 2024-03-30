@@ -45,7 +45,14 @@ def get_metadata(source_folder):
 
         # Extract the features from the image, but only if the image has one or more dx classes.
         dx = load_dx(record)
-                
+        mod_dx = []
+        for label in dx:
+            if label == 'Normal':
+                mod_dx.append('NORM')
+            else:
+                mod_dx.append(label)                
+        dx = mod_dx
+        
         #ecg_id = records[i].split('/')[-1]
         output_dict = {'RECORD_ID': record_id}
         for label in label_set:
