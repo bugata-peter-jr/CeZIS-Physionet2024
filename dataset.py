@@ -33,7 +33,8 @@ class FileImageDataset(torch.utils.data.Dataset):
     def __getitem__(self, i):
         
         record_id = self.record_ids[i]
-            
+        #print(record_id)
+         
         images = load_images(self.path + '/' + record_id)
         
         if len(images) > 1:
@@ -41,13 +42,13 @@ class FileImageDataset(torch.utils.data.Dataset):
         else:
             j = 0
         image = images[j]
-                    
-        aug = iaa.Sequential([iaa.Resize({"width": 300, "height": "keep-aspect-ratio"}, interpolation='area')])
+           
+        aug = iaa.Sequential([iaa.Resize({"width": 600, "height": "keep-aspect-ratio"}, interpolation='area')])
         image = aug(images=[np.array(image)])[0]
         image = Image.fromarray(image)
         image = image.convert('RGB')
         
-        img_new = Image.new(image.mode, (300, 242), (255, 255, 255))
+        img_new = Image.new(image.mode, (600, 512), (255, 255, 255))
         img_new.paste(image)
 
         X = np.asarray(img_new, dtype=np.float32) 

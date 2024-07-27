@@ -20,7 +20,7 @@ class WeightedBCEWithLogitsLoss(torch.nn.modules.loss._Loss):
     def forward(self, output, target):
         #print('output:', output)
         #print('target:', target)
-        weights = target * self.pos_weight + (1-target) * self.neg_weight
+        weights = target * self.pos_weight.to(device=output.device) + (1-target) * self.neg_weight.to(device=output.device)
         #print('weights:', weights)
         # tym, ktore maju -1, dame vahu neg_weight
         bmask = torch.lt(target, torch.zeros_like(target))#.float()
@@ -38,6 +38,24 @@ class WeightedBCEWithLogitsLoss(torch.nn.modules.loss._Loss):
         result = F.binary_cross_entropy_with_logits(output, smooth_target, weight=weights, reduction=self.reduction)
         
         return result 
+
+class HuberLoss(torch.nn.modules.loss._Loss):
+
+    def __init__(self, reduction: str = 'mean', delta: float = 1.0) -> None:
+        super().__init__(reduction=reduction)
+        self.delta = delta
+
+    def forward(self, output, target):
+        error = output - target
+        abs_error = torch.abs(error)
+        quadratic = torch.min(abs_error, self.delta * torch.ones_like(abs_error))
+        linear = (abs_error - quadratic)
+        losses = 0.5 * quadratic ** 2 + self.delta * linear
+        if self.reduction == 'sum':
+            return torch.sum(losses)
+        if self.reduction == 'mean':
+            return torch.mean(losses)
+        return losses
     
 if __name__ == '__main__':
     

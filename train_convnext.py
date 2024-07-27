@@ -10,17 +10,17 @@ import os
 import pandas as pd
 import numpy as np
 
-from helper_code import find_records, load_dx
+from helper_code import find_records, load_labels
 
 import torch
 from pytorch_model_summary import summary
 
 from dataset import FileImageDataset
-from networks import ConvnextNetwork
-from net_utils_sup import NetworkModel
+from network import ConvnextNetwork
+from net_utils import NetworkModel
 from losses import WeightedBCEWithLogitsLoss
 from metrics import MultilabelF1Macro
-from convnext_config import Config
+from config import Config
 
 # get metadata
 def get_metadata(source_folder):
@@ -35,7 +35,7 @@ def get_metadata(source_folder):
     # Extract the features and labels.
     print('Extracting features and labels from the data...')
     
-    label_set = ['CD','HYP','MI','NORM','STTC']
+    labels = ['NORM', 'Acute MI', 'Old MI', 'STTC', 'CD', 'HYP', 'PAC', 'PVC', 'AFIB/AFL', 'TACHY', 'BRADY']
     
     output = []
 
@@ -44,18 +44,9 @@ def get_metadata(source_folder):
         record = os.path.join(source_folder, record_id)
 
         # Extract the features from the image, but only if the image has one or more dx classes.
-        dx = load_dx(record)
-        mod_dx = []
-        for label in dx:
-            if label == 'Normal':
-                mod_dx.append('NORM')
-            else:
-                mod_dx.append(label)                
-        dx = mod_dx
-        
-        #ecg_id = records[i].split('/')[-1]
+        dx = load_labels(record)
         output_dict = {'RECORD_ID': record_id}
-        for label in label_set:
+        for label in labels:
             if label in dx:
                 output_dict[label] = 1
             else:
@@ -64,6 +55,9 @@ def get_metadata(source_folder):
         output.append(output_dict)
     
     mddf = pd.DataFrame(output)
+    
+    # additional renaming columns 
+    mddf.rename(columns={'Acute MI':'Acute_MI', 'Old MI':'Old_MI', 'AFIB/AFL':'AFIB_AFL'}, inplace=True)
     return mddf
 
 # count trainable params
@@ -71,6 +65,7 @@ def count_params(network):
     return sum(p.numel() for p in network.parameters() if p.requires_grad)
 
 # split weights into two smaller files
+# beacuse files larger than 50 MB are not allowed for GitHub
 def save_to_two_files(state_dict, output_path, f_prefix):
     state_dict_A, state_dict_B = {}, {}
     for i, (key, val) in enumerate(state_dict.items()):
@@ -81,25 +76,28 @@ def save_to_two_files(state_dict, output_path, f_prefix):
     torch.save(state_dict_A, output_path + '/' + f_prefix + '_A.h5')
     torch.save(state_dict_B, output_path + '/' + f_prefix + '_B.h5')
 
-# merge files into one state dict    
-def load_from_two_files(path_to_load, f_prefix):
-    state_dict_A = torch.load(path_to_load + '/' + f_prefix + '_A.h5')
-    state_dict_B = torch.load(path_to_load + '/' + f_prefix + '_B.h5') 
+# merge files into one state dict 
+# beacuse weights were split to two files
+def load_from_two_files(path_to_load, f_prefix, map_loc):
+    state_dict_A = torch.load(path_to_load + '/' + f_prefix + '_A.h5', map_location=map_loc)
+    state_dict_B = torch.load(path_to_load + '/' + f_prefix + '_B.h5', map_location=map_loc) 
     return {**state_dict_A, **state_dict_B}
 
 # training networks - only classifiaction layer
 def train(data_folder, pretrained_path, output_path):
     
     # labels
-    labels = ['NORM','CD','HYP','MI','STTC']
+    labels = ['NORM', 'Acute_MI', 'Old_MI', 'STTC', 'CD', 'HYP', 'PAC', 'PVC', 'AFIB_AFL', 'TACHY', 'BRADY']
     
     # configuration
     cfg = Config()
     print(cfg)
     
-    # mddf
+    # getting metadata from header files
     mddf = get_metadata(data_folder)
-    #mddf = mddf[:1000]
+    
+    # image folder - same as data folder
+    image_folder = data_folder
     
     # networks are pretrained from 5-fold cross validation 
     for i in range(5):
@@ -111,28 +109,25 @@ def train(data_folder, pretrained_path, output_path):
         train_target = mddf.loc[:, labels].values
         
         # datasets and loaders
-        train_ds = FileImageDataset(data_folder, train_ids, train_target, random_erasing=cfg.random_erasing)
+        train_ds = FileImageDataset(image_folder, train_ids, train_target, random_erasing=cfg.random_erasing)
         
         train_dl = torch.utils.data.DataLoader(train_ds, shuffle=True, batch_size=cfg.batch_size, num_workers=cfg.P)
     
         # make convnext model
-        network = ConvnextNetwork(n_outputs=5)
-        
+        network = ConvnextNetwork(weights=cfg.pretrained, progress=cfg.progress, n_classes=11, stochastic_depth_prob=0.1)
+
         # freeze ConvNext
+        # only classification head will be trained
         print()
         print('Fold:', i)
         print('Trainable params before freezing: ',  count_params(network))
         for param in network.convnext.parameters():
             param.requires_grad = False
-        for param in network.convnext.classifier[2].parameters():   
+        for param in network.convnext.classifier.linear.parameters():   
             param.requires_grad = True 
         print('ConvNext weights frozen. Trainable params: ',  count_params(network))
-        
-        # summary
-        if i == 0:
-            summary(network, torch.rand(1, 3, 242, 300), show_hierarchical=True, 
-                    print_summary=True, show_parent_layers=True, max_depth=None)
-        
+
+                
         # to device
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         network = network.to(device=device)
@@ -158,21 +153,24 @@ def train(data_folder, pretrained_path, output_path):
         
         # construct model
         model = NetworkModel(network=network, optimizer=optimizer, scheduler=scheduler, 
-                 loss_function=loss_fn, metrics=eval_metrics, use_metric='f1', accum_iters=1,
+                 loss_fn=loss_fn, metric_fn=eval_metrics, use_metric='f1', accum_iters=1,
                  n_repeats=1, pred_agg=None,
                  verbose=True, grad_norm=None, use_16fp=cfg.use_16fp, 
                  freeze_BN=False, output_fn=torch.sigmoid, mixup=cfg.mixup, 
                  rank=None, world_size=1)
 
+        # summary
+        if i == 0:
+            model.summary((1, 3, 512, 600))
+
         # load weights from pretrained
-        state_dict = load_from_two_files(pretrained_path, f_prefix='weights{}'.format(i))
+        state_dict = load_from_two_files(pretrained_path, f_prefix='weights{}'.format(i), map_loc=device)
         model.network.load_state_dict(state_dict)
-        #model.load_weights(pretrained_path + '/' + pretrained_file)
         
         # fit
         model_file = 'weights{}.h5'.format(i)
         model_path = output_path + '/' + model_file
-        model.fit(loader=train_dl, loader_valid=None, n_epochs=cfg.n_epochs, model_file=model_path)
+        model.fit(loader=train_dl, loader_valid=None, n_epochs=cfg.n_epochs, model_file=None)
 
         # save weights
         model.save_weights(model_path)

@@ -12,16 +12,16 @@
 import numpy as np
 import os
 
-from helper_code import *
-
-import pandas as pd
+from helper_code import load_images
 
 import torch
-from networks import ConvnextNetwork
 from train_convnext import train, load_from_two_files
+from network import ConvnextNetwork, ConvnextNetworkSimple
+import pandas as pd
 
 from imgaug import augmenters as iaa
 from PIL import Image
+
 
 ################################################################################
 #
@@ -29,16 +29,11 @@ from PIL import Image
 #
 ################################################################################
 
+# Train your models. This function is *required*. You should edit this function to add your code, but do *not* change the arguments
+# of this function. If you do not train one of the models, then you can return None for the model.
+
 # Train your digitization model.
-def train_digitization_model(data_folder, model_folder, verbose):
-    # Find data files.
-    if verbose:
-        print('Training of digitization model not implemented.')
-
-    return
-
-# Train your dx classification model.
-def train_dx_model(data_folder, model_folder, verbose):
+def train_models(data_folder, model_folder, verbose):
     # Find data files.
     if verbose:
         print('Training of dx model...')
@@ -51,64 +46,48 @@ def train_dx_model(data_folder, model_folder, verbose):
 
     return
 
-# Load your trained digitization model. This function is *required*. You should edit this function to add your code, but do *not*
-# change the arguments of this function. If you do not train a digitization model, then you can return None.
-def load_digitization_model(model_folder, verbose):
-    return None
+# Load your trained models. This function is *required*. You should edit this function to add your code, but do *not* change the
+# arguments of this function. If you do not train one of the models, then you can return None for the model.
+def load_models(model_folder, verbose):
+    # no digitization model
+    digitization_model = None
 
-# Load your trained dx classification model. This function is *required*. You should edit this function to add your code, but do
-# *not* change the arguments of this function. If you do not train a dx classification model, then you can return None.
-def load_dx_model(model_folder, verbose):
-    model = Model(eval_mode=False)
-    model.load(model_folder)
-    return model
+    # classification model
+    classification_model = Model(eval_mode=False)
+    classification_model.load(model_folder)
+
+    return digitization_model, classification_model
 
 # Run your trained digitization model. This function is *required*. You should edit this function to add your code, but do *not*
-# change the arguments of this function.
-def run_digitization_model(digitization_model, record, verbose):
-
-    # Load the dimensions of the signal.
-    header_file = get_header_file(record)
-    header = load_text(header_file)
-
-    num_samples = get_num_samples(header)
-    num_signals = get_num_signals(header)
-
-    return np.zeros(shape=(num_samples, num_signals), dtype=np.int16)
-
-# Run your trained dx classification model. This function is *required*. You should edit this function to add your code, but do
-# *not* change the arguments of this function.
-def run_dx_model(dx_model, record, signal, verbose):
-
-    probabilities = dx_model.predict(record)
-    #classes = dx_model.classes
-
-    # Choose the class(es) with the highest probability as the label(s).
-    #max_probability = np.nanmax(probabilities)
-    #labels = [classes[i] for i, probability in enumerate(probabilities) if probability == max_probability]
+# change the arguments of this function. If you did not train one of the models, then you can return None for the model.
+def run_models(record, digitization_model, classification_model, verbose):
+    # no digitization model
+    signals = None
     
-    norm_prob = probabilities[0]    
-    if norm_prob >= 0.5:
-        labels = ['Normal']
-    else:
-        labels = ['Abnormal']
-    
-    return labels
+    # classification model
+    probs = classification_model.predict(record)
+    classes = classification_model.classes
+    labels = [classes[i] for i in range(len(classes)) if probs[i] >= 0.5]
+
+    return signals, labels
 
 ################################################################################
 #
 # Optional functions. You can change or remove these functions and/or add new functions.
 #
 ################################################################################
-    
+
 class Model(object):
     
     def __init__(self, eval_mode=False):
         
-        self.networks_rot = []
+        # networks pretrained to predict rotation angle
+        self.networks_rot = []        
         
+        # networks pretrained to predict labels
         self.networks_dx = []
         
+        # evaluation mode
         self.eval_mode = eval_mode
         if self.eval_mode:
             self.ecg_folds = pd.read_csv('./folds.csv')
@@ -116,9 +95,10 @@ class Model(object):
         # device
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         
-        self.classes = ['NORM','CD','HYP','MI','STTC']
+        # classes
+        self.classes = ['NORM', 'Acute MI', 'Old MI', 'STTC', 'CD', 'HYP', 'PAC', 'PVC', 'AFIB/AFL', 'TACHY', 'BRADY']
         
-        
+    # load model from folder    
     def load(self, folder):
         pretrained_folder = './pretrained'
                 
@@ -127,7 +107,7 @@ class Model(object):
             f_prefix = 'weights{:d}'.format(i)
             
             # create network with correct device - rotation
-            network = ConvnextNetwork(n_outputs=1)
+            network = ConvnextNetworkSimple(weights=None, progress=False, n_classes=1, stochastic_depth_prob=0.1)
             network = network.to(device=self.device)
             
             # to evaluation mode
@@ -135,7 +115,7 @@ class Model(object):
             
             try:
                 rot_pretrained_path = pretrained_folder + '/rotation'
-                state_dict = load_from_two_files(rot_pretrained_path, f_prefix)
+                state_dict = load_from_two_files(rot_pretrained_path, f_prefix, map_loc=self.device)
                 network.load_state_dict(state_dict, strict=True)
             except:
                 print('Weights file: {:s} not available.'.format(rot_pretrained_path + '/' + f_prefix))
@@ -143,7 +123,7 @@ class Model(object):
             self.networks_rot.append(network)
 
             # create network with correct device - dx
-            network = ConvnextNetwork(n_outputs=5)
+            network = ConvnextNetwork(weights=None, progress=False, n_classes=11, stochastic_depth_prob=0.1)
             network = network.to(device=self.device)
             
             # to evaluation mode
@@ -151,23 +131,20 @@ class Model(object):
             
             try:
                 dx_pretrained_path = pretrained_folder + '/dx' 
-                state_dict = load_from_two_files(dx_pretrained_path, f_prefix)                
+                state_dict = load_from_two_files(dx_pretrained_path, f_prefix, map_loc=self.device)                
                 network.load_state_dict(state_dict, strict=True)
             except:
                 print('Weights file: {:s} not available.'.format(dx_pretrained_path + '/' + f_prefix))
             
             self.networks_dx.append(network)
             
+    # predict one image
     def predict_image(self, ecg_image, record):
-        # load image              
-        
-        aug = iaa.Sequential([iaa.Resize({"width": 300, "height": "keep-aspect-ratio"}, interpolation='area')])
+        # load image                      
+        aug = iaa.Sequential([iaa.Resize({"width": 600, "height": "keep-aspect-ratio"}, interpolation='area')])
         ecg_image = aug(images=[np.array(ecg_image)])[0]
         ecg_image = Image.fromarray(ecg_image)
         ecg_image = ecg_image.convert('RGB')
-        
-        #img_new = Image.new(ecg_image.mode, (300, 242), (255, 255, 255))
-        #img_new.paste(ecg_image)
 
         ecg_image = np.asarray(ecg_image, dtype=np.float32) 
         ecg_image = ecg_image[:, :, :3]        
@@ -225,11 +202,12 @@ class Model(object):
 
         return avg_prob
     
+    # predict all images for given record
     def predict(self, record):
         print('Record:', record) 
         
         # load ecg images
-        ecg_images = load_image(record)
+        ecg_images = load_images(record)
         
         # predict each image and average
         preds_for_imgs = [self.predict_image(ecg_image, record) for ecg_image in ecg_images]

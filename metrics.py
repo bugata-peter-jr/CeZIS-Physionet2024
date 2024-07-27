@@ -15,7 +15,6 @@ class BaseMetric(object):
     
     def compute(self, prediction, target):
         return 0
-    
 
 # multilabel F1 score - macro
 class MultilabelF1Macro(BaseMetric):        
@@ -36,6 +35,9 @@ class MultilabelF1Macro(BaseMetric):
         return 'f1'
 
     def compute(self, prediction, target):
+        #print('metric.prediction:', prediction)
+        #print('metric.target:', target)
+        
         if self.reverse_first_label:
             new_prediction = prediction.detach().clone()
             new_prediction[:,0] = 1 - new_prediction[:,0]
@@ -74,8 +76,13 @@ class MultilabelF1Macro(BaseMetric):
         label_fns = label_fns * bmask
         label_fn = label_fns.sum(axis=0)
         #print('FN:', label_fn)
-        
-        result = (label_tp)/(label_tp + (label_fp + label_fn)/2)
+      
+        #print('label_tp:', label_tp)
+        denom = (label_tp + (label_fp + label_fn)/2)
+        denom[denom == 0] = 1
+        #print('denom:', denom)
+        result = (label_tp)/denom
+        #print('result:', result)
 
         if self.label_weights is None:
             f1 = result.sum() / classes.size(1)
@@ -83,3 +90,13 @@ class MultilabelF1Macro(BaseMetric):
             f1 = (result * self.label_weights).sum() / self.label_weights.sum()
             
         return f1.item() * 100
+    
+class MAE(BaseMetric):
+    
+    def get_name(self):
+        return 'mae'
+    
+    def compute(self, prediction, target):
+        result = -torch.mean(torch.abs(prediction-target)).item()
+        # vynasobit 30, aby sme dostali realnu chybu
+        return 30 * result
