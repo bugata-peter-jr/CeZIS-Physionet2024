@@ -50,7 +50,10 @@ class Classifier(torch.nn.Module):
 class ConvnextNetwork(torch.nn.Module):
     def __init__(self, weights, progress, n_classes, stochastic_depth_prob=0.1):
         super().__init__()
-        self.convnext = convnext_tiny(weights=weights, progress=progress, stochastic_depth_prob=stochastic_depth_prob)
+        if weights is not None:
+            self.convnext = convnext_tiny(weights=weights, progress=progress, stochastic_depth_prob=stochastic_depth_prob)
+        else:
+            self.convnext = convnext_tiny(stochastic_depth_prob=stochastic_depth_prob)            
         self.convnext.avgpool = CombinedPool()
         self.convnext.classifier = Classifier(n_classes)
         
@@ -60,7 +63,10 @@ class ConvnextNetwork(torch.nn.Module):
 class ConvnextNetworkSimple(torch.nn.Module):
     def __init__(self, weights, progress, n_classes, stochastic_depth_prob=0.1):
         super().__init__()
-        self.convnext = convnext_tiny(weights=weights, progress=progress, stochastic_depth_prob=stochastic_depth_prob)
+        if weights is not None:
+            self.convnext = convnext_tiny(weights=weights, progress=progress, stochastic_depth_prob=stochastic_depth_prob)
+        else:
+            self.convnext = convnext_tiny(stochastic_depth_prob=stochastic_depth_prob)                        
         self.convnext.classifier[2] = torch.nn.Linear(768, n_classes)
         
     def forward(self, x):

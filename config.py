@@ -14,8 +14,9 @@ class Config(object):
     
     def __init__(self):
         # ConvNext config
-        self.progress = True
-        self.pretrained = ConvNeXt_Tiny_Weights.IMAGENET1K_V1
+        self.progress = False
+        #self.pretrained = ConvNeXt_Tiny_Weights.IMAGENET1K_V1
+        self.pretrained = None
         self.stochastic_depth_prob = 0.1
 
         # dataset and loader params
