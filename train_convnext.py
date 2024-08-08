@@ -23,7 +23,7 @@ from metrics import MultilabelF1Macro
 from config import Config
 
 # get metadata
-def get_metadata(source_folder):
+def get_metadata(source_folder, labels):
     # find records
     records = find_records(source_folder)
     num_records = len(records)
@@ -34,9 +34,7 @@ def get_metadata(source_folder):
 
     # Extract the features and labels.
     print('Extracting features and labels from the data...')
-    
-    labels = ['NORM', 'Acute MI', 'Old MI', 'STTC', 'CD', 'HYP', 'PAC', 'PVC', 'AFIB/AFL', 'TACHY', 'BRADY']
-    
+        
     output = []
 
     for i in range(num_records):
@@ -94,7 +92,7 @@ def train(data_folder, pretrained_path, output_path):
     print(cfg)
     
     # getting metadata from header files
-    mddf = get_metadata(data_folder)
+    mddf = get_metadata(data_folder, cfg.classes)
     
     # image folder - same as data folder
     image_folder = data_folder
@@ -153,7 +151,7 @@ def train(data_folder, pretrained_path, output_path):
         
         # construct model
         model = NetworkModel(network=network, optimizer=optimizer, scheduler=scheduler, 
-                 loss_fn=loss_fn, metric_fn=eval_metrics, use_metric='f1', accum_iters=1,
+                 loss_fn=loss_fn, metric_fn=eval_metrics, use_metric='f1', accum_iters=cfg.accum_iters,
                  n_repeats=1, pred_agg=None,
                  verbose=True, grad_norm=None, use_16fp=cfg.use_16fp, 
                  freeze_BN=False, output_fn=torch.sigmoid, mixup=cfg.mixup, 

@@ -15,9 +15,11 @@ import os
 from helper_code import load_images
 
 import torch
+import pandas as pd
+
 from train_convnext import train, load_from_two_files
 from network import ConvnextNetwork, ConvnextNetworkSimple
-import pandas as pd
+from config import Config
 
 from imgaug import augmenters as iaa
 from PIL import Image
@@ -76,16 +78,22 @@ def run_models(record, digitization_model, classification_model, verbose):
 # Optional functions. You can change or remove these functions and/or add new functions.
 #
 ################################################################################
-
+    
 class Model(object):
     
     def __init__(self, eval_mode=False):
+        # configuration
+        cfg = Config()
+        
+        # weighting of predictions - weight of prediction of pretrained model
+        self.w_pretrained = cfg.w_pretrained
         
         # networks pretrained to predict rotation angle
         self.networks_rot = []        
         
         # networks pretrained to predict labels
         self.networks_dx = []
+        self.networks_dx_finetuned = []
         
         # evaluation mode
         self.eval_mode = eval_mode
@@ -96,7 +104,7 @@ class Model(object):
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         
         # classes
-        self.classes = ['NORM', 'Acute MI', 'Old MI', 'STTC', 'CD', 'HYP', 'PAC', 'PVC', 'AFIB/AFL', 'TACHY', 'BRADY']
+        self.classes = cfg.classes
         
     # load model from folder    
     def load(self, folder):
@@ -137,6 +145,23 @@ class Model(object):
                 print('Weights file: {:s} not available.'.format(dx_pretrained_path + '/' + f_prefix))
             
             self.networks_dx.append(network)
+
+            # create network with correct device - dx (finetuned)
+            network = ConvnextNetwork(weights=None, progress=False, n_classes=11, stochastic_depth_prob=0.1)
+            network = network.to(device=self.device)
+            
+            # to evaluation mode
+            network.eval()
+            
+            try: 
+                model_path = folder + '/weights{:d}'.format(i) + '.h5'
+                state_dict = torch.load(model_path, map_location=self.device)                
+                network.load_state_dict(state_dict, strict=True)
+            except:
+                print('Weights file: {:s} not available.'.format(model_path))
+            
+            self.networks_dx_finetuned.append(network)
+
             
     # predict one image
     def predict_image(self, ecg_image, record):
@@ -195,12 +220,16 @@ class Model(object):
             x = x.unsqueeze(0)
             #print('x.shape:', x.shape)
             if self.eval_mode:
-                avg_prob = torch.sigmoid(self.networks_dx[fold](x)).cpu().numpy()[0,:]
+                avg_prob1 = torch.sigmoid(self.networks_dx[fold](x)).cpu().numpy()[0,:]
+                avg_prob2 = torch.sigmoid(self.networks_dx_finetuned[fold](x)).cpu().numpy()[0,:]
             else:
-                prob_list = [torch.sigmoid(network(x)).cpu().numpy()[0,:] for network in self.networks_dx]
-                avg_prob = sum(prob_list) / len(prob_list)
+                prob_list1 = [torch.sigmoid(network(x)).cpu().numpy()[0,:] for network in self.networks_dx]
+                avg_prob1 = sum(prob_list1) / len(prob_list1)
+                
+                prob_list2 = [torch.sigmoid(network(x)).cpu().numpy()[0,:] for network in self.networks_dx_finetuned]
+                avg_prob2 = sum(prob_list2) / len(prob_list2)
 
-        return avg_prob
+        return self.w_pretrained * avg_prob1 + (1 - self.w_pretrained) * avg_prob2
     
     # predict all images for given record
     def predict(self, record):

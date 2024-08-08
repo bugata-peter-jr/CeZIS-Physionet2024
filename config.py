@@ -26,8 +26,9 @@ class Config(object):
         # loss
         self.label_smoothing = 0.0
         
-        # 'NORM', 'Acute MI', 'Old MI', 'STTC', 'CD', 'HYP', 'PAC', 'PVC', 'AFIB/AFL', 'TACHY', 'BRADY'
-        self.pos_weight = [1.0, 4.0, 2.0, 1.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0]   
+        self.classes = ['NORM', 'Acute MI', 'Old MI', 'STTC', 'CD', 'HYP', 'PAC', 'PVC', 'AFIB/AFL', 'TACHY', 'BRADY']
+    
+        self.pos_weight = [1.0, 4.0, 2.0, 1.5, 2.0, 2.0, 3.0, 2.0, 1.0, 1.0, 1.0] 
         self.neg_weight = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         
         # mixup
@@ -37,9 +38,9 @@ class Config(object):
         self.random_erasing = True
                
         # Train parameters  
-        self.n_epochs = 5                                           # number of training epochs 
-        self.batch_size = 24                                        # batch size
-        self.accum_iters = 3                                         # possible gradient accumulation
+        self.n_epochs = 5                                            # number of training epochs 
+        self.batch_size = 64                                         # batch size
+        self.accum_iters = 1                                         # possible gradient accumulation
         self.optimizer_type = 'adamw'                                # typ optimalizatora
         self.scheduler_type = 'one_cycle'                            # typ planovaca lr        
         self.max_lr = 0.0001                                         # maximal learning rate
@@ -48,10 +49,11 @@ class Config(object):
         self.div_final = 10000.0                                     # final div factor
         self.WD = 0.01 * 5                                           # weight decay
         self.use_16fp = True                                         # mixed precision
-        
-        self.first_fold_only = False
-        
+                
         self.use_4v_logic = True
+    
+        # weight of pretrained model
+        self.w_pretrained = 1.0    
     
     def __str__(self):
         s = ''
