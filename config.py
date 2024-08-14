@@ -53,7 +53,7 @@ class Config(object):
         self.use_4v_logic = True
     
         # weight of pretrained model
-        self.w_pretrained = 0.8    
+        self.w_pretrained = 0.0    
     
     def __str__(self):
         s = ''
