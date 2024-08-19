@@ -20,6 +20,7 @@ import pandas as pd
 from train_convnext import train, load_from_two_files
 from network import ConvnextNetwork, ConvnextNetworkSimple
 from config import Config
+from dataset import resize_image, rotate_image, image_to_tensor
 
 from imgaug import augmenters as iaa
 from PIL import Image
@@ -127,6 +128,7 @@ class Model(object):
                 network.load_state_dict(state_dict, strict=True)
             except:
                 print('Weights file: {:s} not available.'.format(rot_pretrained_path + '/' + f_prefix))
+                exit(-2)
             
             self.networks_rot.append(network)
 
@@ -143,6 +145,7 @@ class Model(object):
                 network.load_state_dict(state_dict, strict=True)
             except:
                 print('Weights file: {:s} not available.'.format(dx_pretrained_path + '/' + f_prefix))
+                exit(-3)
             
             self.networks_dx.append(network)
 
@@ -159,34 +162,19 @@ class Model(object):
                 network.load_state_dict(state_dict, strict=True)
             except:
                 print('Weights file: {:s} not available.'.format(model_path))
+                exit(-4)
             
             self.networks_dx_finetuned.append(network)
 
-            
     # predict one image
     def predict_image(self, ecg_image, record):
-        # load image                      
-        aug = iaa.Sequential([iaa.Resize({"width": 600, "height": "keep-aspect-ratio"}, interpolation='area')])
-        ecg_image = aug(images=[np.array(ecg_image)])[0]
-        ecg_image = Image.fromarray(ecg_image)
-        ecg_image = ecg_image.convert('RGB')
 
-        ecg_image = np.asarray(ecg_image, dtype=np.float32) 
-        ecg_image = ecg_image[:, :, :3]        
-                                
-        # divide by 255
-        ecg_image /= 255
-        
-        # normalization
-        mean = np.array([0.485,0.456,0.406])
-        std = np.array([0.229, 0.224, 0.225])
-        ecg_image = (ecg_image - mean) / std                
-        
+        # resize image    
+        ecg_image = resize_image(ecg_image)
+                        
         # do not compute gradient
         with torch.no_grad():
-            # to tensor
-            x = torch.as_tensor(ecg_image, dtype=torch.float32, device=self.device)
-            x = x.permute((2,0,1))
+            x = image_to_tensor(ecg_image, self.device)
             x = x.unsqueeze(0)
             #print('x.shape:', x.shape)
             if self.eval_mode:
@@ -211,14 +199,13 @@ class Model(object):
             avg_angle = int(round(30 * avg_angle_n))
     
             # rotate image back
-            aug = iaa.Sequential([iaa.Affine(rotate=-avg_angle)])
-            ecg_image = aug(images=[np.array(ecg_image)])[0]
+            ecg_image = rotate_image(ecg_image, -avg_angle)
     
             # to tensor
-            x = torch.as_tensor(ecg_image, dtype=torch.float32, device=self.device)
-            x = x.permute((2,0,1))
-            x = x.unsqueeze(0)
+            x = image_to_tensor(ecg_image, self.device)
+            x = x.unsqueeze(0)            
             #print('x.shape:', x.shape)
+            
             if self.eval_mode:
                 avg_prob1 = torch.sigmoid(self.networks_dx[fold](x)).cpu().numpy()[0,:]
                 avg_prob2 = torch.sigmoid(self.networks_dx_finetuned[fold](x)).cpu().numpy()[0,:]
@@ -230,7 +217,7 @@ class Model(object):
                 avg_prob2 = sum(prob_list2) / len(prob_list2)
 
         return self.w_pretrained * avg_prob1 + (1 - self.w_pretrained) * avg_prob2
-    
+
     # predict all images for given record
     def predict(self, record):
         print('Record:', record) 

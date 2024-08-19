@@ -6,17 +6,18 @@ Within The George B. Moody PhysioNet Challenge 2024, we developed a method for c
 
 ## Authors - members of CeZIS Team
     ├── VSL
+    │   ├──  Peter Bugata
+    │   ├──  Peter Bugata ml. 
     │   ├──  Vladimíra Kmečová
     │   ├──  Monika Staňková
     │   ├──  Dávid Hudák
     │   ├──  Dávid Gajdoš
-    │   ├──  Peter Bugata
-    │   ├──  Peter Bugata ml. 
     ├── UPJŠ
-    │   ├──  Gabriela Vozáriková
-    │   ├──  Erik Bruoth
-    │   ├──  Ivan Žežula
     │   ├──  Ľubomír Antoni
+    │   ├──  Gabriela Vozáriková
+    │   ├──  Ivan Žežula
+    │   ├──  Erik Bruoth
+    │   ├──  Manohar Gowdru Shridhara
 
 ## Submission structure
     ├── CeZIS Team Submission Structure
