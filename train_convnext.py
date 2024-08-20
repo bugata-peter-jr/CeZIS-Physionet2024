@@ -9,7 +9,6 @@ import os
 
 import pandas as pd
 import numpy as np
-import joblib
 
 from helper_code import find_records, load_labels, load_images
 
@@ -58,10 +57,6 @@ def load_rotation_models():
 
 # get rotation metadata
 def get_rotation(source_folder):
-
-    if os.path.exists('./rotation_dict.pkl'):    
-        rotation_dict = joblib.load('./rotation_dict.pkl')
-        return rotation_dict
     
     # load rotation models
     networks_rot = load_rotation_models()        
@@ -108,9 +103,7 @@ def get_rotation(source_folder):
             rotation_dict[str(record_id) + '-' + str(j)] = avg_angle
             output_dict = {'RECORD_ID': record_id, 'COPY_ID': j, 'AVG_ANGLE': avg_angle}
             output.append(output_dict)
-    
-    joblib.dump(rotation_dict, './rotation_dict.pkl', protocol=0)
-    
+        
     mddf = pd.DataFrame(output)
     mddf.to_csv('./rotation.csv', index=False)
     
